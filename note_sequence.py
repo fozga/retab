@@ -10,6 +10,36 @@ def midi_to_note_name(midi_number: int) -> str:
     note_name = notes[midi_number % 12]
     return f"{note_name}{octave}"
 
+def format_note_name(midi_number: int, show_octave: bool = False) -> str:
+    """Return note name with optional octave suffix."""
+    full_name = midi_to_note_name(midi_number)
+    if show_octave:
+        return full_name
+    return re.sub(r'-?\d+$', '', full_name)
+
+def normalize_technique_symbols(text: str) -> str:
+    """Normalize technique symbols for readability (slides '/' and '\\' -> 's')."""
+    return text.replace('/', 's').replace('\\', 's')
+
+def center_duplicate_connectors(line: str) -> str:
+    """
+    Convert duplicated connectors to a single centered connector while preserving width.
+    Example: p---p -> --p--, h--h -> --h-.
+    """
+    for symbol in ['h', 'p', 's', 'r']:
+        escaped = re.escape(symbol)
+        pattern = re.compile(rf'{escaped}(-+){escaped}')
+
+        def repl(match):
+            total_len = len(match.group(0))
+            left = total_len // 2
+            right = total_len - left - 1
+            return ('-' * left) + symbol + ('-' * right)
+
+        line = pattern.sub(repl, line)
+
+    return line
+
 # --- Data Models ---
 @dataclass
 class Note:
@@ -57,7 +87,11 @@ def max_simultaneous_notes_in_timeline(timeline: List[TimeSlice]) -> int:
         default=1
     )
 
-def render_note_sequence(timeline: List[TimeSlice], fixed_height: Optional[int] = None) -> str:
+def render_note_sequence(
+    timeline: List[TimeSlice],
+    fixed_height: Optional[int] = None,
+    show_octave: bool = False,
+) -> str:
     """
     Takes the parsed timeline and renders an intermediate ASCII representation 
     using actual note names (e.g., C4, D#3) instead of frets.
@@ -71,7 +105,7 @@ def render_note_sequence(timeline: List[TimeSlice], fixed_height: Optional[int] 
     if fixed_height is not None and fixed_height > 0:
         max_simultaneous_notes = fixed_height
     else:
-        max_simultaneous_notes = max_simultaneous_notes_in_timeline(timeline)
+        max_simultaneous_notes = max(3,max_simultaneous_notes_in_timeline(timeline))
     
     # Initialize empty string builders for our lines
     lines = ["" for _ in range(max_simultaneous_notes)]
@@ -96,9 +130,17 @@ def render_note_sequence(timeline: List[TimeSlice], fixed_height: Optional[int] 
         # Sort descending so highest note is line 0
         sorted_notes = sorted(valid_notes, key=lambda n: n.pitch_midi, reverse=True)
         
-        # Convert to text (e.g., 'C4', 'x')
-        note_strings = [midi_to_note_name(n.pitch_midi) for n in sorted_notes]
-        note_strings.extend(['x' for _ in dead_notes])
+        # Convert to text with techniques (e.g., '/C4~', 'x', 'hD5').
+        note_strings = [
+            f"{normalize_technique_symbols(n.technique_before)}"
+            f"{format_note_name(n.pitch_midi, show_octave=show_octave)}"
+            f"{normalize_technique_symbols(n.technique_after)}"
+            for n in sorted_notes
+        ]
+        note_strings.extend([
+            f"{normalize_technique_symbols(n.technique_before)}x{normalize_technique_symbols(n.technique_after)}"
+            for n in dead_notes
+        ])
         
         # Find the max width required in this specific vertical column.
         # Add 1 extra char so adjacent note tokens are always separated by '-'.
@@ -113,7 +155,8 @@ def render_note_sequence(timeline: List[TimeSlice], fixed_height: Optional[int] 
                 # If this line has no note playing, fill it completely with dashes
                 lines[i] += '-' * slice_width
 
-    return "\n".join(lines)
+    centered_lines = [center_duplicate_connectors(line) for line in lines]
+    return "\n".join(centered_lines)
 
 # --- Quick Test ---
 if __name__ == "__main__":

@@ -55,7 +55,9 @@ def finalize_target_tab_chunk(chunk: str, target_tuning_midi: List[int]) -> str:
 
     for idx, line in enumerate(lines):
         label = labels[idx] if idx < len(labels) else "s"
-        normalized_line = line[1:] if line.startswith('|') else line
+        normalized_line = re.sub(r'^-+\|', '|', line)
+        if normalized_line.startswith('|'):
+            normalized_line = normalized_line[1:]
         formatted_lines.append(f"{label}|{normalized_line}")
 
     return "\n".join(formatted_lines)
@@ -75,6 +77,28 @@ def main():
     parser.add_argument("-t", "--target", 
                         help="Target tuning (preset name like 'ukulele' or custom like 'G4-C4-E4-A4'). "
                              "If omitted, renders abstract note sequence.")
+    parser.add_argument(
+        "--strictness",
+        choices=["strict", "balanced", "conservative"],
+        default="strict",
+        help=(
+            "Translation strictness for melodic-contour preservation: "
+            "strict, balanced, or conservative. Default: strict."
+        ),
+    )
+    parser.add_argument(
+        "--show-octave",
+        action="store_true",
+        help="In note-sequence mode, include octave numbers (e.g., C#4). Default is off.",
+    )
+    parser.add_argument(
+        "--prefer-adjacent-strings",
+        action="store_true",
+        help=(
+            "In translation mode, prefer same/adjacent string movement over wider jumps "
+            "using a short melodic history window."
+        ),
+    )
     parser.add_argument("-o", "--output", help="Path to save the output file (optional)")
     
     args = parser.parse_args()
@@ -108,7 +132,12 @@ def main():
             if metadata_lines:
                 rendered_chunks.extend(metadata_lines)
 
-            current_render = render_target_tab(block_timeline, target_tuning_midi)
+            current_render = render_target_tab(
+                block_timeline,
+                target_tuning_midi,
+                strictness=args.strictness,
+                prefer_adjacent_strings=args.prefer_adjacent_strings,
+            )
             if pending_tab_chunk:
                 pending_tab_chunk = concat_tab_chunks(pending_tab_chunk, current_render)
             else:
@@ -134,7 +163,11 @@ def main():
             if metadata_lines:
                 rendered_chunks.extend(metadata_lines)
 
-            current_render = render_note_sequence(block_timeline, fixed_height=file_max_height)
+            current_render = render_note_sequence(
+                block_timeline,
+                fixed_height=max(3, file_max_height),
+                show_octave=args.show_octave,
+            )
             if pending_tab_chunk:
                 pending_tab_chunk = concat_tab_chunks(pending_tab_chunk, current_render)
             else:

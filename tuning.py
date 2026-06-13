@@ -21,6 +21,7 @@ PRESET_TUNINGS = {
     "ukulele-low-g": ["G3", "C4", "E4", "A4"],
     "bass": ["E1", "A1", "D2", "G2"],
     "violin": ["G3", "D4", "A4", "E5"],
+    "violin-drop-c": ["c3", "D4", "A4", "E5"],
     "mandolin": ["G3", "D4", "A4", "E5"],
 }
 

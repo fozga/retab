@@ -24,6 +24,8 @@ class TimeSlice:
 # --- Parser Logic ---
 
 DEFAULT_GUITAR_OCTAVES = [4, 3, 3, 3, 2, 2]
+TECHNIQUE_CHARS = {'h', 'p', '/', '\\', 'b', 'r', '~'}
+CONNECTING_TECHNIQUES = {'h', 'p', '/', '\\', 'r'}
 
 def is_tab_line(line: str) -> bool:
     """Checks if a line looks like a guitar tab line."""
@@ -153,10 +155,14 @@ def parse_tab_block(lines: List[str], base_tunings_midi: List[int], time_offset:
     # Trackers to skip characters when we process multi-digit numbers (like '12')
     # index maps to string_index
     skip_chars = [0] * num_strings
+    last_note_on_string: List[Optional[Note]] = [None] * num_strings
+    pending_technique_before = ["" for _ in range(num_strings)]
+    in_parentheses = [False] * num_strings
     
     # Start scanning from left to right (visual columns)
     for col_idx in range(max_length):
         current_slice = TimeSlice(visual_index=col_idx + time_offset)
+        column_has_symbol = False
         
         # Check if the entire column is a bar line
         col_chars = [padded_lines[s][col_idx] for s in range(num_strings)]
@@ -172,6 +178,21 @@ def parse_tab_block(lines: List[str], base_tunings_midi: List[int], time_offset:
                 continue
                 
             char = padded_lines[string_idx][col_idx]
+
+            if char == '(':
+                in_parentheses[string_idx] = True
+                column_has_symbol = True
+                continue
+
+            if char == ')':
+                in_parentheses[string_idx] = False
+                column_has_symbol = True
+                continue
+
+            if in_parentheses[string_idx] and (char.isdigit() or char.lower() == 'x'):
+                # Ghost notes in brackets (e.g., (7)) should not become playable notes.
+                column_has_symbol = True
+                continue
             
             if char.isdigit():
                 # Extract full number (look ahead)
@@ -189,21 +210,51 @@ def parse_tab_block(lines: List[str], base_tunings_midi: List[int], time_offset:
                 pitch = base_tunings_midi[string_idx] + fret_num
                 
                 note = Note(string_index=string_idx, fret=fret_num, pitch_midi=pitch)
+                if pending_technique_before[string_idx]:
+                    note.technique_before = pending_technique_before[string_idx]
+                    pending_technique_before[string_idx] = ""
+
                 current_slice.notes.append(note)
                 current_slice.is_empty = False
+                last_note_on_string[string_idx] = note
                 
             elif char.lower() == 'x':
                  # Handle dead notes
                  note = Note(string_index=string_idx, fret='x')
+                 if pending_technique_before[string_idx]:
+                     note.technique_before = pending_technique_before[string_idx]
+                     pending_technique_before[string_idx] = ""
+
                  current_slice.notes.append(note)
                  current_slice.is_empty = False
+                 last_note_on_string[string_idx] = note
+
+            elif char in TECHNIQUE_CHARS:
+                # Technique symbols occupy visual space and should be preserved in timing.
+                column_has_symbol = True
+
+                if last_note_on_string[string_idx] is not None:
+                    last_note_on_string[string_idx].technique_after += char
+
+                # Some techniques connect previous and next note (e.g., 5h7, 8/10).
+                # Attach to upcoming note too so articulation remains clearly visible.
+                if char in CONNECTING_TECHNIQUES:
+                    pending_technique_before[string_idx] += char
+
+            elif char not in {'-', ' ', '|'}:
+                # Preserve unknown tab symbols in timeline spacing to avoid drift.
+                column_has_symbol = True
             
             # NOTE: For techniques (h, p, /, ~, etc.), a more advanced look-around 
             # would be implemented here to attach them to the 'Note' objects.
                 
         # Only add the slice if there's actually a note, or if we want to preserve spacing.
         # For mapping purposes, preserving empty slices (dashes) helps reconstruct the tab later.
-        if not current_slice.is_empty or all(padded_lines[s][col_idx] in ['-', ' '] for s in range(num_strings)):
+        if (
+            not current_slice.is_empty
+            or all(padded_lines[s][col_idx] in ['-', ' '] for s in range(num_strings))
+            or column_has_symbol
+        ):
             timeline.append(current_slice)
 
     return timeline
