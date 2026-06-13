@@ -27,6 +27,55 @@ DEFAULT_GUITAR_OCTAVES = [4, 3, 3, 3, 2, 2]
 TECHNIQUE_CHARS = {'h', 'p', '/', '\\', 'b', 'r', '~'}
 CONNECTING_TECHNIQUES = {'h', 'p', '/', '\\', 'r'}
 
+def extract_line_prefix(line: str) -> str:
+    """Return string prefix before first bar, e.g. 'E' in 'E|---' (or '' if absent)."""
+    if '|' not in line:
+        return ""
+    return line.split('|', 1)[0].strip()
+
+def sanitize_tab_line(line: str) -> str:
+    """
+    Remove trailing repeat annotations like 'x2' that are text markers,
+    not dead-note content (e.g. '...|   x2').
+    """
+    cleaned = line.rstrip()
+    cleaned = re.sub(r'\s+[xX]\d+\s*$', '', cleaned)
+    return cleaned
+
+def detect_source_prefixes_and_count(file_path: str) -> Tuple[List[str], int]:
+    """
+    Detect source string prefixes and expected number of strings from the first
+    contiguous prefixed tab run.
+    """
+    prefixes: List[str] = []
+
+    with open(file_path, 'r') as f:
+        in_run = False
+        for raw_line in f:
+            line = raw_line.rstrip('\n')
+            if not line.strip():
+                if in_run and prefixes:
+                    break
+                continue
+
+            if not is_tab_line(line):
+                if in_run and prefixes:
+                    break
+                continue
+
+            pref = extract_line_prefix(line)
+            if pref:
+                in_run = True
+                prefixes.append(pref)
+            elif in_run and prefixes:
+                # Continuation without prefix after prefixed run; ignore for detection.
+                continue
+
+    if not prefixes:
+        return ["e", "B", "G", "D", "A", "E"], 6
+
+    return prefixes, len(prefixes)
+
 def is_tab_line(line: str) -> bool:
     """Checks if a line looks like a guitar tab line."""
     # Standard prefixed line (e|... / B|... etc.)
@@ -49,6 +98,7 @@ def extract_tab_blocks(file_path: str) -> List[List[str]]:
     """
     blocks = []
     current_block = []
+    _, expected_strings = detect_source_prefixes_and_count(file_path)
     
     with open(file_path, 'r') as f:
         for line in f:
@@ -57,8 +107,8 @@ def extract_tab_blocks(file_path: str) -> List[List[str]]:
                 continue
                 
             if is_tab_line(stripped):
-                current_block.append(stripped.lstrip())
-                if len(current_block) == 6:
+                current_block.append(sanitize_tab_line(stripped).lstrip())
+                if len(current_block) == expected_strings:
                     blocks.append(current_block)
                     current_block = []
             else:
@@ -81,6 +131,7 @@ def extract_tab_blocks_with_metadata(file_path: str) -> Tuple[List[Tuple[List[st
     blocks_with_meta: List[Tuple[List[str], List[str]]] = []
     pending_meta: List[str] = []
     current_block: List[str] = []
+    _, expected_strings = detect_source_prefixes_and_count(file_path)
 
     with open(file_path, 'r') as f:
         for raw_line in f:
@@ -94,9 +145,9 @@ def extract_tab_blocks_with_metadata(file_path: str) -> Tuple[List[Tuple[List[st
                 continue
 
             if is_tab_line(stripped):
-                current_block.append(stripped.lstrip().rstrip())
+                current_block.append(sanitize_tab_line(stripped).lstrip().rstrip())
 
-                if len(current_block) == 6:
+                if len(current_block) == expected_strings:
                     # Remove trailing empty metadata rows to keep output tidy.
                     while pending_meta and pending_meta[-1] == "":
                         pending_meta.pop()
@@ -294,6 +345,11 @@ def parse_tab_blocks_with_sections(file_path: str, base_tunings_midi: List[int])
         parsed_blocks.append((metadata_lines, block_timeline, ends_with_bar))
 
     return parsed_blocks, trailing_meta
+
+def detect_source_prefixes(file_path: str) -> List[str]:
+    """Public helper used by CLI to derive source tuning from tab itself."""
+    prefixes, _ = detect_source_prefixes_and_count(file_path)
+    return prefixes
 
 
 

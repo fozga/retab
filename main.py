@@ -5,9 +5,93 @@ from typing import List
 
 # Importy Twoich modułów
 from tuning import get_tuning_midi, midi_to_note_name
-from parser import parse_tab_blocks_with_sections, resolve_string_tunings
+from parser import parse_tab_blocks_with_sections, resolve_string_tunings, detect_source_prefixes
 from translator import render_target_tab
 from note_sequence import render_note_sequence, max_simultaneous_notes_in_timeline
+
+HEURISTIC_PRESETS = {
+    # Violin-family focused presets
+    "violin-lyrical": {
+        "strictness": "strict",
+        "prefer_adjacent_strings": True,
+        "max_target_fret": 17,
+        "string_history_window": 5,
+        "connector_jump_limit": 6,
+        "run_lock_strength": 1.8,
+    },
+    "violin-playable": {
+        "strictness": "balanced",
+        "prefer_adjacent_strings": True,
+        "max_target_fret": 10,
+        "string_history_window": 4,
+        "connector_jump_limit": 5,
+        "run_lock_strength": 1.3,
+    },
+    "violin-aggressive": {
+        "strictness": "strict",
+        "prefer_adjacent_strings": False,
+        "max_target_fret": 15,
+        "string_history_window": 3,
+        "connector_jump_limit": 8,
+        "run_lock_strength": 0.8,
+    },
+    # Bass-focused presets
+    "bass-tight": {
+        "strictness": "balanced",
+        "prefer_adjacent_strings": True,
+        "max_target_fret": 9,
+        "string_history_window": 5,
+        "connector_jump_limit": 4,
+        "run_lock_strength": 1.4,
+    },
+    "bass-smooth": {
+        "strictness": "conservative",
+        "prefer_adjacent_strings": True,
+        "max_target_fret": 12,
+        "string_history_window": 4,
+        "connector_jump_limit": 5,
+        "run_lock_strength": 1.1,
+    },
+}
+
+def resolve_heuristics(args):
+    """
+    Resolve translation heuristic settings from defaults + optional preset + explicit CLI overrides.
+    Explicit flags always win over preset values.
+    """
+    config = {
+        "strictness": "strict",
+        "prefer_adjacent_strings": False,
+        "max_target_fret": None,
+        "string_history_window": 4,
+        "connector_jump_limit": 7,
+        "run_lock_strength": 1.0,
+        "open_string_jump_scale": None,
+        "reversal_penalty": None,
+    }
+
+    if args.heuristic_preset:
+        config.update(HEURISTIC_PRESETS[args.heuristic_preset])
+
+    # Explicit CLI overrides (None means user did not set it).
+    if args.strictness is not None:
+        config["strictness"] = args.strictness
+    if args.prefer_adjacent_strings is not None:
+        config["prefer_adjacent_strings"] = args.prefer_adjacent_strings
+    if args.max_target_fret is not None:
+        config["max_target_fret"] = args.max_target_fret
+    if args.string_history_window is not None:
+        config["string_history_window"] = args.string_history_window
+    if args.connector_jump_limit is not None:
+        config["connector_jump_limit"] = args.connector_jump_limit
+    if args.run_lock_strength is not None:
+        config["run_lock_strength"] = args.run_lock_strength
+    if args.open_string_jump_scale is not None:
+        config["open_string_jump_scale"] = args.open_string_jump_scale
+    if args.reversal_penalty is not None:
+        config["reversal_penalty"] = args.reversal_penalty
+
+    return config
 
 def normalize_tab_line_start(line: str) -> str:
     """Replace leading dash-runs before first bar marker with '#|' for readability."""
@@ -64,8 +148,20 @@ def finalize_target_tab_chunk(chunk: str, target_tuning_midi: List[int]) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="TabTranslator: Translate guitar tablatures to any string instrument.",
-        epilog="Example: python main.py song.txt -t ukulele"
+        description=(
+            "Retab: parse guitar-style ASCII tabs, preserve sections, and render either\n"
+            "(1) an abstract note sequence or\n"
+            "(2) translated tab for a target tuning/instrument."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  python main.py song.txt -o output.txt\n"
+            "  python main.py song.txt --show-octave -o output.txt\n"
+            "  python main.py song.txt -t ukulele -o output.txt\n"
+            "  python main.py song.txt -t violin-drop-c --heuristic-preset violin-lyrical -o output.txt\n"
+            "  python main.py song.txt -t bass --heuristic-preset bass-tight --max-target-fret 10 -o output.txt"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     
     # Obsługa przypadku bez argumentów
@@ -75,15 +171,26 @@ def main():
         
     parser.add_argument("input_file", help="Path to the source .txt tab file")
     parser.add_argument("-t", "--target", 
-                        help="Target tuning (preset name like 'ukulele' or custom like 'G4-C4-E4-A4'). "
-                             "If omitted, renders abstract note sequence.")
+                        help=(
+                            "Target tuning preset (e.g. 'ukulele', 'bass', 'violin', 'violin-drop-c')\n"
+                            "or custom tuning string like 'G4-C4-E4-A4'.\n"
+                            "If omitted, renders abstract note sequence."
+                        ))
+    parser.add_argument(
+        "--heuristic-preset",
+        choices=sorted(HEURISTIC_PRESETS.keys()),
+        help=(
+            "Apply a preset bundle of translation heuristics. "
+            "Any explicitly provided heuristic flags override preset values."
+        ),
+    )
     parser.add_argument(
         "--strictness",
         choices=["strict", "balanced", "conservative"],
-        default="strict",
+        default=None,
         help=(
             "Translation strictness for melodic-contour preservation: "
-            "strict, balanced, or conservative. Default: strict."
+            "strict, balanced, or conservative. Default: preset/default value."
         ),
     )
     parser.add_argument(
@@ -94,10 +201,47 @@ def main():
     parser.add_argument(
         "--prefer-adjacent-strings",
         action="store_true",
+        default=None,
         help=(
             "In translation mode, prefer same/adjacent string movement over wider jumps "
             "using a short melodic history window."
         ),
+    )
+    parser.add_argument(
+        "--max-target-fret",
+        type=int,
+        default=None,
+        help="Override max fret considered playable during translation (default: auto per instrument).",
+    )
+    parser.add_argument(
+        "--string-history-window",
+        type=int,
+        default=None,
+        help="How many recent melodic notes influence adjacent-string preference (default: preset/default value).",
+    )
+    parser.add_argument(
+        "--connector-jump-limit",
+        type=int,
+        default=None,
+        help="Max same-string fret jump to keep connectors (h/p/s/r) in translated tab (default: preset/default value).",
+    )
+    parser.add_argument(
+        "--run-lock-strength",
+        type=float,
+        default=None,
+        help="Scale for phrase register lock penalty in monophonic runs (default: preset/default value).",
+    )
+    parser.add_argument(
+        "--open-string-jump-scale",
+        type=float,
+        default=None,
+        help="Scale factor for jump penalties when one of the notes is open string (0.0 disables those penalties).",
+    )
+    parser.add_argument(
+        "--reversal-penalty",
+        type=float,
+        default=None,
+        help="Override penalty for long-distance back-and-forth position reversals.",
     )
     parser.add_argument("-o", "--output", help="Path to save the output file (optional)")
     
@@ -105,7 +249,7 @@ def main():
 
     # try:
     # 1. Resolve source tuning (assuming standard guitar if not specified)
-    source_prefixes = ["e", "B", "G", "D", "A", "E"]
+    source_prefixes = detect_source_prefixes(args.input_file)
     base_tunings = resolve_string_tunings(source_prefixes)
     
     # 2. Parse the input tab file into a timeline of TimeSlices
@@ -124,6 +268,7 @@ def main():
     if args.target:
         print(f"[*] Translating to {args.target}...")
         target_tuning_midi = get_tuning_midi(args.target)
+        heuristic_config = resolve_heuristics(args)
         for metadata_lines, block_timeline, ends_with_bar in parsed_blocks:
             if metadata_lines and pending_tab_chunk:
                 rendered_chunks.append(finalize_target_tab_chunk(pending_tab_chunk, target_tuning_midi))
@@ -135,8 +280,14 @@ def main():
             current_render = render_target_tab(
                 block_timeline,
                 target_tuning_midi,
-                strictness=args.strictness,
-                prefer_adjacent_strings=args.prefer_adjacent_strings,
+                strictness=heuristic_config["strictness"],
+                prefer_adjacent_strings=heuristic_config["prefer_adjacent_strings"],
+                max_target_fret=heuristic_config["max_target_fret"],
+                string_history_window=heuristic_config["string_history_window"],
+                connector_jump_limit=heuristic_config["connector_jump_limit"],
+                run_lock_strength=heuristic_config["run_lock_strength"],
+                open_string_jump_scale=heuristic_config["open_string_jump_scale"],
+                reversal_penalty=heuristic_config["reversal_penalty"],
             )
             if pending_tab_chunk:
                 pending_tab_chunk = concat_tab_chunks(pending_tab_chunk, current_render)

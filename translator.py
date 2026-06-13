@@ -19,10 +19,15 @@ def get_strictness_profile(strictness: str) -> Dict[str, float]:
             "string_change_penalty": 2.5,
             "jump_threshold": 4.0,
             "jump_penalty": 1.3,
+            "large_jump_threshold": 5.0,
+            "large_jump_penalty": 4.0,
+            "open_string_jump_scale": 0.2,
+            "position_reversal_penalty": 10.0,
+            "position_reversal_threshold": 5.0,
             "direction_mismatch_penalty": 10.0,
             "source_same_string_penalty": 2.0,
-            "source_string_direction_mismatch_penalty": 6.0,
-            "source_string_static_penalty": 5.0,
+            "source_string_direction_mismatch_penalty": 3.0,
+            "source_string_static_penalty": 1.5,
             "interval_distortion_penalty": 0.9,
             "post_top_string_drop_penalty": 2.5,
             "octave_penalty": 2.0,
@@ -37,10 +42,15 @@ def get_strictness_profile(strictness: str) -> Dict[str, float]:
             "string_change_penalty": 4.0,
             "jump_threshold": 3.5,
             "jump_penalty": 1.7,
+            "large_jump_threshold": 5.0,
+            "large_jump_penalty": 8.0,
+            "open_string_jump_scale": 0.2,
+            "position_reversal_penalty": 16.0,
+            "position_reversal_threshold": 5.0,
             "direction_mismatch_penalty": 18.0,
             "source_same_string_penalty": 3.5,
-            "source_string_direction_mismatch_penalty": 10.0,
-            "source_string_static_penalty": 8.0,
+            "source_string_direction_mismatch_penalty": 5.0,
+            "source_string_static_penalty": 2.5,
             "interval_distortion_penalty": 1.3,
             "post_top_string_drop_penalty": 4.0,
             "octave_penalty": 1.4,
@@ -55,10 +65,15 @@ def get_strictness_profile(strictness: str) -> Dict[str, float]:
         "string_change_penalty": 6.0,
         "jump_threshold": 3.0,
         "jump_penalty": 2.0,
+        "large_jump_threshold": 5.0,
+        "large_jump_penalty": 14.0,
+        "open_string_jump_scale": 0.2,
+        "position_reversal_penalty": 24.0,
+        "position_reversal_threshold": 5.0,
         "direction_mismatch_penalty": 32.0,
         "source_same_string_penalty": 5.0,
-        "source_string_direction_mismatch_penalty": 16.0,
-        "source_string_static_penalty": 12.0,
+        "source_string_direction_mismatch_penalty": 7.0,
+        "source_string_static_penalty": 3.5,
         "interval_distortion_penalty": 2.1,
         "post_top_string_drop_penalty": 7.0,
         "octave_penalty": 1.0,
@@ -98,6 +113,7 @@ def apply_uniform_octave_shift(
 def score_fingering(
     fingering: Dict[int, int],
     previous_fingering: Optional[Dict[int, int]] = None,
+    penalize_high_frets: bool = True,
 ) -> float:
     """
     Lower score is better.
@@ -113,12 +129,15 @@ def score_fingering(
     score += sum(frets)
 
     # Strong penalty when notes drift high up the neck.
-    high_frets = [f for f in frets if f > 12]
-    score += sum((f - 12) * 3.0 for f in high_frets)
-    if high_frets and len(high_frets) >= max(1, len(frets) // 2):
-        score += 40.0
-    if max(frets) > 15:
-        score += (max(frets) - 15) * 6.0
+    # For bass-oriented heuristics this is handled at broader phrase/shift level,
+    # not locally per note/chord.
+    if penalize_high_frets:
+        high_frets = [f for f in frets if f > 12]
+        score += sum((f - 12) * 3.0 for f in high_frets)
+        if high_frets and len(high_frets) >= max(1, len(frets) // 2):
+            score += 40.0
+        if max(frets) > 15:
+            score += (max(frets) - 15) * 6.0
 
     # Encourage compact hand shape in chords.
     if len(frets) > 1:
@@ -144,13 +163,28 @@ def choose_single_note_fingering(
     strictness_profile: Dict[str, float],
     prefer_adjacent_strings: bool = False,
     recent_target_strings: Optional[List[int]] = None,
+    recent_target_frets: Optional[List[int]] = None,
+    string_history_window: int = 4,
     locked_octave_offset: Optional[int] = None,
+    penalize_high_frets: bool = True,
+    open_string_jump_scale_override: Optional[float] = None,
+    reversal_penalty_override: Optional[float] = None,
 ) -> Tuple[Dict[int, int], int, int]:
     """
     Choose fingering for monophonic slices with melodic-contour preference.
     Prefers preserving phrase direction and same-string continuity when feasible.
     """
     candidates: List[Tuple[float, int, int, int]] = []  # (score, string_idx, fret, chosen_pitch)
+    open_string_jump_scale = (
+        strictness_profile["open_string_jump_scale"]
+        if open_string_jump_scale_override is None
+        else max(0.0, open_string_jump_scale_override)
+    )
+    reversal_penalty = (
+        strictness_profile["position_reversal_penalty"]
+        if reversal_penalty_override is None
+        else max(0.0, reversal_penalty_override)
+    )
 
     pitch_variants = [pitch, pitch + 12]
     if strictness_profile["allow_plus_24"] >= 1.0:
@@ -171,8 +205,21 @@ def choose_single_note_fingering(
                 # Small penalty for octave-alternative placement.
                 score += (abs(chosen_pitch - pitch) / 12.0) * strictness_profile["octave_penalty"]
 
-                if fret > 12:
+                if penalize_high_frets and fret > 12:
                     score += (fret - 12) * 5.0
+
+                # Bass-specific: do not locally collapse high-register source phrases.
+                # If source fret is high (lead-like passage), prefer upper target positions.
+                if (not penalize_high_frets) and source_note is not None and isinstance(source_note.fret, int):
+                    if source_note.fret >= 12:
+                        if fret < 8:
+                            score += (8 - fret) * 6.0
+                        if fret < 12:
+                            score += (12 - fret) * 3.0
+
+                        # Prefer highest target string for lead-like high-register passages.
+                        highest_idx = len(target_tuning_midi) - 1
+                        score += (highest_idx - string_idx) * 2.5
 
                 if previous_target_note is not None:
                     prev_string, prev_fret, prev_pitch = previous_target_note
@@ -182,8 +229,14 @@ def choose_single_note_fingering(
                         score += strictness_profile["string_change_penalty"]
 
                     jump = abs(fret - prev_fret)
+                    jump_scale = 1.0
+                    if fret == 0 or prev_fret == 0:
+                        # Open-string jumps are usually easy and should not dominate scoring.
+                        jump_scale = open_string_jump_scale
                     if jump > strictness_profile["jump_threshold"]:
-                        score += (jump - strictness_profile["jump_threshold"]) * strictness_profile["jump_penalty"]
+                        score += (jump - strictness_profile["jump_threshold"]) * strictness_profile["jump_penalty"] * jump_scale
+                    if jump > strictness_profile["large_jump_threshold"]:
+                        score += (jump - strictness_profile["large_jump_threshold"]) * strictness_profile["large_jump_penalty"] * jump_scale
 
                     # Preserve melodic direction from source phrase when possible.
                     if source_note is not None and previous_source_note is not None:
@@ -198,6 +251,20 @@ def choose_single_note_fingering(
                         # If source stays on same string, heavily prefer staying on same target string.
                         if source_note.string_index == previous_source_note.string_index and string_idx != prev_string:
                             score += strictness_profile["source_same_string_penalty"]
+
+                        # Keep connector semantics physically valid in translated melody.
+                        # pull-off (p): current pitch must be lower than previous pitch.
+                        # hammer-on (h): current pitch must be higher than previous pitch.
+                        before_norm = normalize_technique_symbols(source_note.technique_before)
+                        prev_after_norm = normalize_technique_symbols(previous_source_note.technique_after)
+                        if 'p' in before_norm and chosen_pitch >= prev_pitch:
+                            score += 60.0
+                        if 'h' in before_norm and chosen_pitch <= prev_pitch:
+                            score += 60.0
+                        if 'p' in prev_after_norm and chosen_pitch >= prev_pitch:
+                            score += 60.0
+                        if 'h' in prev_after_norm and chosen_pitch <= prev_pitch:
+                            score += 60.0
 
                         # Preserve source string-travel direction.
                         # Source indexing: smaller index = higher-pitched string (e.g., e=0, E=5).
@@ -215,7 +282,7 @@ def choose_single_note_fingering(
 
                 # Optional broader string-flow smoothing over recent melody notes.
                 if prefer_adjacent_strings and recent_target_strings:
-                    recent_window = recent_target_strings[-4:]
+                    recent_window = recent_target_strings[-string_history_window:]
                     for age, hist_string in enumerate(reversed(recent_window), start=1):
                         weight = 1.0 / age
                         distance = abs(string_idx - hist_string)
@@ -232,18 +299,55 @@ def choose_single_note_fingering(
                     if highest_idx in recent_window and string_idx < highest_idx:
                         score += strictness_profile["post_top_string_drop_penalty"]
 
+                # Hard continuity bias: after reaching high register on highest string,
+                # avoid immediate drops to lower strings (e.g., E13 -> A10).
+                if previous_target_note is not None:
+                    prev_string, prev_fret, _ = previous_target_note
+                    highest_idx = len(target_tuning_midi) - 1
+                    if prev_string == highest_idx and prev_fret >= 12 and string_idx < highest_idx:
+                        score += strictness_profile["post_top_string_drop_penalty"] * 8.0
+
+                # Also avoid collapsing the register on the same top string (e.g., 12 -> 1).
+                if previous_target_note is not None:
+                    prev_string, prev_fret, prev_pitch = previous_target_note
+                    highest_idx = len(target_tuning_midi) - 1
+                    if prev_string == highest_idx and prev_fret >= 12:
+                        downward = prev_pitch - chosen_pitch
+                        if downward > 5:
+                            score += (downward - 5) * strictness_profile["post_top_string_drop_penalty"] * 2.0
+
+                # Strongly penalize long-distance back-and-forth hand movement.
+                # Single relocation is acceptable; oscillation is not.
+                if recent_target_frets and len(recent_target_frets) >= 2:
+                    prev2 = recent_target_frets[-2]
+                    prev1 = recent_target_frets[-1]
+                    d1 = prev1 - prev2
+                    d2 = fret - prev1
+                    thr = strictness_profile["position_reversal_threshold"]
+
+                    # Direction reversal after a large move.
+                    if d1 != 0 and d2 != 0 and (d1 > 0) != (d2 > 0):
+                        if abs(d1) >= thr and abs(d2) >= thr:
+                            score += reversal_penalty
+
+                    # Explicit bounce-back near earlier position after large excursion.
+                    if abs(d1) >= thr and abs(fret - prev2) <= 1:
+                        score += reversal_penalty * 1.2
+
                 local_candidates.append((score, string_idx, fret, chosen_pitch))
 
         return local_candidates
 
-    if locked_octave_offset is not None:
+    candidates = collect_candidates(pitch_variants)
+    if locked_octave_offset is not None and candidates:
         locked_pitch = pitch + locked_octave_offset
-        candidates = collect_candidates([locked_pitch])
-        if not candidates:
-            # If lock is impossible, gracefully fall back to all variants.
-            candidates = collect_candidates(pitch_variants)
-    else:
-        candidates = collect_candidates(pitch_variants)
+        lock_penalty = strictness_profile["run_shift_change_penalty"] * 0.8
+        softened = []
+        for score, string_idx, fret, chosen_pitch in candidates:
+            if chosen_pitch != locked_pitch:
+                score += lock_penalty
+            softened.append((score, string_idx, fret, chosen_pitch))
+        candidates = softened
 
     if not candidates:
         return {}, pitch, 0
@@ -313,6 +417,12 @@ def render_target_tab(
     target_tuning_midi: List[int],
     strictness: str = "strict",
     prefer_adjacent_strings: bool = False,
+    max_target_fret: Optional[int] = None,
+    string_history_window: int = 4,
+    connector_jump_limit: int = 7,
+    run_lock_strength: float = 1.0,
+    open_string_jump_scale: Optional[float] = None,
+    reversal_penalty: Optional[float] = None,
 ) -> str:
     """
     Translates the abstract timeline to the target instrument and renders the final ASCII tab.
@@ -324,11 +434,15 @@ def render_target_tab(
     lines = ["" for _ in range(num_strings)]
     previous_fingering: Dict[int, int] = {}
     is_bass_like = (num_strings == 4 and min(target_tuning_midi) <= 40)
-    effective_max_fret = 12 if is_bass_like else 24
+    effective_max_fret = max_target_fret if max_target_fret is not None else 24
     strictness_profile = get_strictness_profile(strictness)
+    string_history_window = max(1, string_history_window)
+    connector_jump_limit = max(0, connector_jump_limit)
+    run_lock_strength = max(0.0, run_lock_strength)
     previous_target_note: Optional[Tuple[int, int, int]] = None
     previous_source_note: Optional[Note] = None
     recent_target_strings: List[int] = []
+    recent_target_frets: List[int] = []
     monophonic_shift_lock: Optional[int] = None
     monophonic_octave_offset_lock: Optional[int] = None
 
@@ -386,7 +500,12 @@ def render_target_tab(
                     strictness_profile,
                     prefer_adjacent_strings=prefer_adjacent_strings,
                     recent_target_strings=recent_target_strings,
+                    recent_target_frets=recent_target_frets,
+                    string_history_window=string_history_window,
                     locked_octave_offset=monophonic_octave_offset_lock if is_monophonic_slice else None,
+                    penalize_high_frets=not is_bass_like,
+                    open_string_jump_scale_override=open_string_jump_scale,
+                    reversal_penalty_override=reversal_penalty,
                 )
                 adjusted_pitches = [chosen_pitch]
             else:
@@ -408,10 +527,22 @@ def render_target_tab(
                 # For non-bass targets, avoid dropping melodic lines an octave unless necessary.
                 shift_bias += (abs(semitone_shift) / 12.0) * strictness_profile["downward_non_bass_shift_penalty"]
 
-            candidate_score = score_fingering(candidate_fingering, previous_fingering) + shift_bias
+            candidate_score = score_fingering(
+                candidate_fingering,
+                previous_fingering,
+                penalize_high_frets=not is_bass_like,
+            ) + shift_bias
+
+            # For non-bass chord slices, strongly prefer compact left-hand spans.
+            if (not is_bass_like) and len(candidate_fingering) > 1:
+                chord_frets = [f for f in candidate_fingering.values() if isinstance(f, int)]
+                if chord_frets:
+                    span = max(chord_frets) - min(chord_frets)
+                    if span > 5:
+                        candidate_score += (span - 5) * 12.0
 
             if is_monophonic_slice and monophonic_shift_lock is not None and semitone_shift != monophonic_shift_lock:
-                candidate_score += strictness_profile["run_shift_change_penalty"]
+                candidate_score += strictness_profile["run_shift_change_penalty"] * run_lock_strength
 
             if candidate_score < best_score:
                 best_score = candidate_score
@@ -498,7 +629,7 @@ def render_target_tab(
                         best_jump = jump
                         best_string = prev_string
 
-                if best_string != s_idx and best_jump <= 7 and best_string not in fingering:
+                if best_string != s_idx and best_jump <= connector_jump_limit and best_string not in fingering:
                     fingering[best_string] = rendered_pitch - target_tuning_midi[best_string]
                     del fingering[s_idx]
                     moved = True
@@ -527,14 +658,12 @@ def render_target_tab(
                     keep_before_connectors = ""
                     if s_idx in previous_fingering:
                         jump = abs(fret - previous_fingering[s_idx])
-                        if jump <= 7:
+                        if jump <= connector_jump_limit:
                             keep_before_connectors = before_connectors
 
-                    # Outgoing connectors are shown when this slice is effectively melodic
-                    # (single sounding note), otherwise they are removed to avoid
-                    # impossible cross-string connector notation.
-                    sounding_int_notes = sum(1 for v in fingering.values() if isinstance(v, int))
-                    keep_after_connectors = after_connectors if sounding_int_notes <= 1 else ""
+                    # Emit only incoming connectors (validated against previous note on same string).
+                    # Suppress outgoing connectors to avoid implying cross-string legato.
+                    keep_after_connectors = ""
 
                     fret_text = (
                         f"{before_other}{keep_before_connectors}"
@@ -565,8 +694,11 @@ def render_target_tab(
                     if isinstance(f, int):
                         previous_target_note = (s, f, melodic_pitch)
                         recent_target_strings.append(s)
-                        if len(recent_target_strings) > 4:
+                        recent_target_frets.append(f)
+                        if len(recent_target_strings) > string_history_window:
                             recent_target_strings.pop(0)
+                        if len(recent_target_frets) > string_history_window:
+                            recent_target_frets.pop(0)
                         break
                 previous_source_note = source_notes[0]
 
