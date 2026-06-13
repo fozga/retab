@@ -1,0 +1,604 @@
+:root {
+  --bg: #fff9ef;
+  --ink: #18120d;
+  --ink-soft: #5a4d42;
+  --panel: rgba(255, 255, 255, 0.82);
+  --line: rgba(24, 18, 13, 0.18);
+  --accent: #de5f2b;
+  --accent-2: #1c8f8a;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --sans: "Bahnschrift", "Barlow", "DIN Alternate", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 20%, rgba(222, 95, 43, 0.2), transparent 35%),
+    radial-gradient(circle at 80% 80%, rgba(28, 143, 138, 0.18), transparent 40%),
+    linear-gradient(170deg, #fffdf8 0%, var(--bg) 100%);
+  min-height: 100vh;
+}
+
+.ambient {
+  position: fixed;
+  border-radius: 999px;
+  filter: blur(48px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.65;
+}
+
+.ambient-a {
+  width: 280px;
+  height: 280px;
+  background: rgba(222, 95, 43, 0.25);
+  left: -40px;
+  top: 80px;
+  animation: floatA 14s ease-in-out infinite;
+}
+
+.ambient-b {
+  width: 320px;
+  height: 320px;
+  background: rgba(28, 143, 138, 0.2);
+  right: -70px;
+  top: 45vh;
+  animation: floatB 18s ease-in-out infinite;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(1100px, 92vw);
+  margin: 28px auto 42px;
+  display: grid;
+  gap: 18px;
+}
+
+.hero {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  padding: 22px 24px;
+  animation: slideIn 420ms ease-out;
+}
+
+.dev-theme-switcher {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.dev-control {
+  width: min(220px, 100%);
+}
+
+.kicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-2);
+  font-size: 0.8rem;
+}
+
+h1 {
+  margin: 0.35rem 0 0.5rem;
+  font-size: clamp(1.5rem, 3.8vw, 2.3rem);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.status {
+  margin-top: 0.8rem;
+  font-size: 0.93rem;
+  color: var(--accent);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  padding: 18px;
+  animation: slideIn 500ms ease-out;
+}
+
+.panel-head h2 {
+  margin: 0 0 10px;
+  font-size: 1.03rem;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+}
+
+.two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.three-up {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.control {
+  display: grid;
+  gap: 6px;
+  position: relative;
+}
+
+.control span {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  width: fit-content;
+}
+
+.hint-chip {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1px solid rgba(24, 18, 13, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--accent);
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: help;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+}
+
+.hint-bubble {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  width: min(340px, 82vw);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(24, 18, 13, 0.12);
+  background: #fffdf8;
+  color: #241b14;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.1);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 20;
+}
+
+.hint-bubble::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 12px;
+  width: 12px;
+  height: 12px;
+  background: #fffdf8;
+  border-top: 1px solid rgba(24, 18, 13, 0.12);
+  border-left: 1px solid rgba(24, 18, 13, 0.12);
+  transform: rotate(45deg);
+}
+
+.label-row:hover .hint-bubble,
+.label-row:focus-within .hint-bubble {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.control.inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 10px;
+  color: var(--ink);
+}
+
+textarea,
+pre {
+  font-family: var(--mono);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 180px;
+}
+
+.actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+}
+
+.advanced-settings {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+}
+
+.advanced-settings summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 500;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.advanced-settings summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-settings summary::after {
+  content: "+";
+  color: var(--accent-2);
+  font-size: 1.1rem;
+}
+
+.advanced-settings[open] summary::after {
+  content: "-";
+}
+
+.advanced-grid {
+  padding: 0 14px 14px;
+}
+
+.btn {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(125deg, var(--accent), #f1933f);
+}
+
+#outputText {
+  margin: 0;
+  min-height: 220px;
+  max-height: 62vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+@media (max-width: 920px) {
+  .three-up {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    width: min(1100px, 95vw);
+    margin-top: 14px;
+  }
+
+  .two-up,
+  .three-up {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes floatA {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(18px, -12px);
+  }
+}
+
+@keyframes floatB {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-20px, 14px);
+  }
+}
+
+/* Custom form controls: file chooser, selects, checkboxes and number steppers */
+input[type="file"] {
+  padding: 8px;
+  line-height: 1.2;
+}
+
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius-sm, 10px) - 1px);
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel));
+  color: var(--ink);
+  padding: 0.42rem 0.72rem;
+  margin-right: 0.72rem;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+input[type="file"]::file-selector-button:hover,
+input[type="file"]::-webkit-file-upload-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 2.2rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+    linear-gradient(135deg, var(--accent) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) calc(50% - 3px),
+    calc(100% - 9px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius-sm, 10px) - 2px);
+  background: color-mix(in srgb, var(--panel) 76%, #ffffff 24%);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+input[type="checkbox"]::after {
+  content: "";
+  width: 0.58rem;
+  height: 0.33rem;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg) scale(0);
+  transition: transform 120ms ease;
+}
+
+input[type="checkbox"]:checked::after {
+  transform: rotate(-45deg) scale(1);
+}
+
+input[type="checkbox"]:focus-visible,
+select:focus-visible,
+input[type="file"]:focus-visible,
+input[type="number"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, #ffffff 28%);
+  outline-offset: 2px;
+}
+
+input[type="number"] {
+  padding-right: 0.5rem;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  opacity: 1;
+  margin: 0;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-left: 1px solid var(--line);
+  cursor: ns-resize;
+}
+
+/* Global UX polish: no native-looking controls + stable tab alignment */
+#inputText,
+#outputText {
+  font-family: var(--mono);
+  line-height: 1.24;
+  letter-spacing: 0;
+  white-space: pre;
+  tab-size: 4;
+  font-variant-ligatures: none;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+#inputText {
+  overflow-x: auto;
+}
+
+select {
+  color: var(--ink);
+  background-clip: padding-box;
+}
+
+select option {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 90%, #000000 10%);
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  padding-right: 0.75rem;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+/* Final controls restore: visible steppers, visible dropdown trigger, themed scrollbars */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 2.35rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M1.4 1.2 6 5.8l4.6-4.6 1.4 1.4L6 8 0 2.6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  background-size: 12px 8px;
+}
+
+input[type="number"] {
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
+  padding-right: 0.4rem;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: auto;
+  appearance: auto;
+  opacity: 1;
+  margin: 0;
+}
+
+#inputText,
+#outputText,
+textarea {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 55%, #666) color-mix(in srgb, var(--panel) 88%, #111);
+}
+
+#inputText::-webkit-scrollbar,
+#outputText::-webkit-scrollbar,
+textarea::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+#inputText::-webkit-scrollbar-track,
+#outputText::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--panel) 88%, #111);
+  border-radius: 10px;
+}
+
+#inputText::-webkit-scrollbar-thumb,
+#outputText::-webkit-scrollbar-thumb,
+textarea::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 55%, #666);
+  border-radius: 10px;
+  border: 2px solid color-mix(in srgb, var(--panel) 88%, #111);
+}
+
+#inputText::-webkit-scrollbar-thumb:hover,
+#outputText::-webkit-scrollbar-thumb:hover,
+textarea::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 72%, #666);
+}
+
+/* Input panel spacing: one extra line between upload/sample row and Paste tab field */
+.input-panel > .control {
+  margin-top: 1lh;
+}
+
+/* Dropdown and number-stepper compatibility tuning */
+select:focus,
+select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, #ffffff 28%);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+select option:checked {
+  background: color-mix(in srgb, var(--accent) 62%, #1d1d1d 38%) !important;
+  color: #ffffff !important;
+}
+
+select option:hover,
+select option:focus {
+  background: color-mix(in srgb, var(--accent) 46%, #2d2d2d 54%) !important;
+  color: #ffffff !important;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: inner-spin-button;
+  appearance: auto;
+  opacity: 1;
+  margin: 0;
+  border-left: 1px solid var(--line);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--panel) 82%, #ffffff 18%) 0%,
+      color-mix(in srgb, var(--panel) 92%, #000000 8%) 100%);
+  cursor: pointer;
+}

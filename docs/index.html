@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>retab web</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Cinzel:wght@400;600;700&family=Exo+2:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Nunito:wght@400;600;700&family=Rajdhani:wght@500;600;700&family=Teko:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link id="activeStylesheet" rel="stylesheet" href="style.css" />
+  <style>
+    #devThemeSwitcher {
+      margin-top: 10px;
+      opacity: 0.72;
+      max-width: 220px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    #devThemeSwitcher:hover,
+    #devThemeSwitcher:focus-within {
+      opacity: 1;
+    }
+
+    #devThemeSwitcher .control {
+      gap: 4px;
+    }
+
+    #devThemeSwitcher .control span {
+      font-size: 0.76rem;
+    }
+
+    #devThemeSwitcher select {
+      font-size: 0.82rem;
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/pyodide/v0.28.3/full/pyodide.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <main class="shell">
+    <header class="hero">
+      <p class="kicker">retab in browser</p>
+      <h1>ASCII tab translator</h1>
+      <p class="subtitle">Upload a tab file or paste text, tweak translation settings, and export a txt result.</p>
+      <p id="status" class="status">Loading Python runtime...</p>
+    </header>
+
+    <section class="panel input-panel">
+      <div class="panel-head">
+        <h2>Input</h2>
+      </div>
+
+      <div class="grid two-up">
+        <label class="control">
+          <span>Upload .txt</span>
+          <input id="fileInput" type="file" accept=".txt,text/plain" />
+        </label>
+
+        <label class="control">
+          <span>Sample</span>
+          <select id="sampleSelect">
+            <option value="">None</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="control">
+        <span>Paste tab</span>
+        <textarea id="inputText" rows="14" placeholder="Paste your ASCII tab here..."></textarea>
+      </label>
+    </section>
+
+    <section class="panel settings-panel">
+      <div class="panel-head">
+        <h2>Translation settings</h2>
+      </div>
+
+      <div class="grid three-up">
+        <label class="control">
+          <span class="label-row">Target preset <button type="button" class="hint-chip" aria-label="Hint about target preset">?</button><span class="hint-bubble" role="tooltip">Pick one of the built-in instrument or tuning presets.</span></span>
+          <select id="targetPreset">
+            <option value="">Select preset</option>
+            <option value="standard">standard</option>
+            <option value="drop-d">drop-d</option>
+            <option value="drop-c">drop-c</option>
+            <option value="open-g">open-g</option>
+            <option value="ukulele">ukulele</option>
+            <option value="ukulele-low-g">ukulele-low-g</option>
+            <option value="bass">bass</option>
+            <option value="violin">violin</option>
+            <option value="violin-drop-c">violin-drop-c</option>
+            <option value="mandolin">mandolin</option>
+          </select>
+        </label>
+
+        <label class="control">
+          <span class="label-row">Heuristic preset <button type="button" class="hint-chip" aria-label="Hint about heuristic preset">?</button><span class="hint-bubble" role="tooltip">Load a tuned bundle of translation parameters for common violin or bass scenarios.</span></span>
+          <select id="preset">
+            <option value="">Default</option>
+            <option value="violin-lyrical">violin-lyrical</option>
+            <option value="violin-playable">violin-playable</option>
+            <option value="violin-aggressive">violin-aggressive</option>
+            <option value="bass-tight">bass-tight</option>
+            <option value="bass-smooth">bass-smooth</option>
+          </select>
+        </label>
+
+        <label class="control">
+          <span class="label-row">Strictness <button type="button" class="hint-chip" aria-label="Hint about strictness">?</button><span class="hint-bubble" role="tooltip">Controls how strongly phrase contour is preserved during translation.</span></span>
+          <select id="strictness">
+            <option value="">Default</option>
+            <option value="strict">strict</option>
+            <option value="balanced">balanced</option>
+            <option value="conservative">conservative</option>
+          </select>
+        </label>
+      </div>
+
+      <details class="advanced-settings">
+        <summary>Advanced settings</summary>
+        <div class="grid three-up advanced-grid">
+          <label class="control">
+            <span class="label-row">Mode <button type="button" class="hint-chip" aria-label="Hint about mode">?</button><span class="hint-bubble" role="tooltip">Choose whether to render note names only or translate into a target instrument tab.</span></span>
+            <select id="mode">
+              <option value="note">Note sequence</option>
+              <option value="target">Target tuning tab</option>
+            </select>
+          </label>
+
+          <label class="control">
+            <span class="label-row">Custom tuning <button type="button" class="hint-chip" aria-label="Hint about custom tuning">?</button><span class="hint-bubble" role="tooltip">Enter your own tuning like G4-C4-E4-A4. Order strings from lowest pitch to highest pitch. If filled, this overrides the preset.</span></span>
+            <input id="customTarget" type="text" placeholder="G4-C4-E4-A4" />
+          </label>
+
+          <label class="control inline">
+            <span class="label-row">Show octave <button type="button" class="hint-chip" aria-label="Hint about show octave">?</button><span class="hint-bubble" role="tooltip">In note mode, include octave numbers like C4 in the output.</span></span>
+            <input id="showOctave" type="checkbox" />
+          </label>
+
+          <label class="control inline">
+            <span class="label-row">Prefer adjacent strings <button type="button" class="hint-chip" aria-label="Hint about adjacent strings">?</button><span class="hint-bubble" role="tooltip">Biases mapping toward same or neighboring strings for smoother movement.</span></span>
+            <input id="preferAdjacent" type="checkbox" />
+          </label>
+
+          <label class="control">
+            <span class="label-row">Max target fret <button type="button" class="hint-chip" aria-label="Hint about max target fret">?</button><span class="hint-bubble" role="tooltip">Hard cap for translated fret numbers. Leave empty for automatic behavior.</span></span>
+            <input id="maxTargetFret" type="number" min="0" placeholder="auto" />
+          </label>
+
+          <label class="control">
+            <span class="label-row">String history window <button type="button" class="hint-chip" aria-label="Hint about string history window">?</button><span class="hint-bubble" role="tooltip">How many recent notes influence string-choice continuity.</span></span>
+            <input id="stringHistoryWindow" type="number" min="1" placeholder="4" />
+          </label>
+
+          <label class="control">
+            <span class="label-row">Connector jump limit <button type="button" class="hint-chip" aria-label="Hint about connector jump limit">?</button><span class="hint-bubble" role="tooltip">Maximum same-string jump where legato connectors are preserved.</span></span>
+            <input id="connectorJumpLimit" type="number" min="0" placeholder="7" />
+          </label>
+
+          <label class="control">
+            <span class="label-row">Run lock strength <button type="button" class="hint-chip" aria-label="Hint about run lock strength">?</button><span class="hint-bubble" role="tooltip">Higher values keep monophonic runs in a more stable register.</span></span>
+            <input id="runLockStrength" type="number" min="0" step="0.1" placeholder="1.0" />
+          </label>
+
+          <label class="control">
+            <span class="label-row">Open string jump scale <button type="button" class="hint-chip" aria-label="Hint about open string jump scale">?</button><span class="hint-bubble" role="tooltip">Scales jump penalties when one note is an open string. Lower means softer penalty.</span></span>
+            <input id="openStringJumpScale" type="number" min="0" step="0.1" placeholder="auto" />
+          </label>
+
+          <label class="control">
+            <span class="label-row">Reversal penalty <button type="button" class="hint-chip" aria-label="Hint about reversal penalty">?</button><span class="hint-bubble" role="tooltip">Extra penalty for large back-and-forth position reversals.</span></span>
+            <input id="reversalPenalty" type="number" min="0" step="0.1" placeholder="auto" />
+          </label>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button id="translateBtn" class="btn btn-primary" disabled>Translate</button>
+        <button id="downloadBtn" class="btn" disabled>Download txt</button>
+      </div>
+    </section>
+
+    <section class="panel output-panel">
+      <div class="panel-head">
+        <h2>Output</h2>
+      </div>
+      <pre id="outputText"></pre>
+    </section>
+
+    <footer id="devThemeSwitcher" class="dev-theme-switcher">
+      <label class="control dev-control">
+        <span>Theme</span>
+        <select id="themeSelect">
+          <option value="themes/radio.css">Radio</option>
+          <option value="themes/stein.css">Stein</option>
+          <option value="themes/zeit.css">Zeit</option>
+          <option value="themes/sonne.css">Sonne</option>
+          <option value="themes/benzin.css">Benzin</option>
+          <option value="themes/puppe.css">Puppe</option>
+          <option value="themes/rosenrot.css">Rosenrot</option>
+          <option value="themes/diamant.css">Diamant</option>
+          <option value="themes/engel.css">Engel</option>
+        </select>
+      </label>
+    </footer>
+  </main>
+</body>
+</html>
