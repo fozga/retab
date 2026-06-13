@@ -45,7 +45,7 @@ const DEFAULT_SAMPLE_PATHS = [
   "samples/fade_to_black.txt",
   "samples/fear_of_the_dark.txt",
 ];
-const OUTPUT_FONT_MIN = 11;
+const OUTPUT_FONT_MIN = 8;
 const OUTPUT_FONT_MAX = 30;
 const OUTPUT_FONT_STEP = 1;
 const OUTPUT_FONT_DEFAULT = 14;
