@@ -35,6 +35,148 @@
       padding-top: 6px;
       padding-bottom: 6px;
     }
+
+    .output-frame {
+      position: relative;
+    }
+
+    .output-toolbar {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: inline-flex;
+      gap: 6px;
+      z-index: 3;
+    }
+
+    .output-tool-btn {
+      border: 1px solid var(--line, rgba(120, 120, 120, 0.35));
+      background: color-mix(in srgb, var(--panel, #fff) 92%, #000 8%);
+      color: var(--ink, #111);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      min-width: 38px;
+      height: 30px;
+      padding: 0 10px;
+      cursor: pointer;
+    }
+
+    .output-tool-btn:hover {
+      filter: brightness(1.05);
+    }
+
+    .output-frame:fullscreen,
+    .output-frame:-webkit-full-screen {
+      background: var(--bg, #0f1115);
+      padding: 14px;
+    }
+
+    .output-frame:fullscreen #outputText,
+    .output-frame:-webkit-full-screen #outputText {
+      min-height: calc(100dvh - 80px);
+      max-height: calc(100dvh - 80px);
+    }
+
+    @media (max-width: 640px) {
+      .shell {
+        width: 96vw;
+        margin: 10px auto 18px;
+        gap: 12px;
+      }
+
+      .hero,
+      .panel {
+        padding: 12px;
+      }
+
+      h1 {
+        font-size: clamp(1.28rem, 7.2vw, 1.72rem);
+        line-height: 1.12;
+      }
+
+      .subtitle,
+      .status,
+      .control span,
+      input,
+      select,
+      textarea,
+      button {
+        font-size: 0.9rem;
+      }
+
+      .grid,
+      .advanced-grid {
+        gap: 10px;
+      }
+
+      .two-up,
+      .three-up {
+        grid-template-columns: 1fr;
+      }
+
+      .control.inline {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .actions .btn {
+        width: 100%;
+      }
+
+      #inputText,
+      #outputText {
+        min-height: 150px;
+      }
+
+      .hint-bubble {
+        width: min(92vw, 340px);
+      }
+
+      .output-toolbar {
+        top: 6px;
+        right: 6px;
+      }
+
+      .output-tool-btn {
+        min-width: 34px;
+        height: 28px;
+        font-size: 0.74rem;
+        padding: 0 8px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 900px) {
+      .shell {
+        width: 94vw;
+        margin: 16px auto 24px;
+        gap: 14px;
+      }
+
+      .hero,
+      .panel {
+        padding: 15px;
+      }
+
+      .three-up {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .actions {
+        flex-wrap: wrap;
+      }
+
+      .actions .btn {
+        min-width: 180px;
+      }
+    }
   </style>
   <script defer src="https://cdn.jsdelivr.net/pyodide/v0.28.3/full/pyodide.js"></script>
   <script defer src="app.js"></script>
@@ -190,7 +332,14 @@
       <div class="panel-head">
         <h2>Output</h2>
       </div>
-      <pre id="outputText"></pre>
+      <div id="outputFrame" class="output-frame">
+        <div class="output-toolbar" aria-label="Output tools">
+          <button id="outputFullscreenBtn" class="output-tool-btn" type="button" title="Toggle fullscreen">Full</button>
+          <button id="outputFontIncBtn" class="output-tool-btn" type="button" title="Increase output font size">A+</button>
+          <button id="outputFontDecBtn" class="output-tool-btn" type="button" title="Decrease output font size">A-</button>
+        </div>
+        <pre id="outputText"></pre>
+      </div>
     </section>
 
     <footer id="devThemeSwitcher" class="dev-theme-switcher">

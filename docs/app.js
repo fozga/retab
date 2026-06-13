@@ -4,6 +4,10 @@ const themeSelectEl = document.getElementById("themeSelect");
 const activeStylesheetEl = document.getElementById("activeStylesheet");
 const inputTextEl = document.getElementById("inputText");
 const outputTextEl = document.getElementById("outputText");
+const outputFrameEl = document.getElementById("outputFrame");
+const outputFullscreenBtnEl = document.getElementById("outputFullscreenBtn");
+const outputFontIncBtnEl = document.getElementById("outputFontIncBtn");
+const outputFontDecBtnEl = document.getElementById("outputFontDecBtn");
 const fileInputEl = document.getElementById("fileInput");
 const sampleSelectEl = document.getElementById("sampleSelect");
 const modeEl = document.getElementById("mode");
@@ -35,6 +39,16 @@ const PY_FILES = [
 ];
 
 const THEME_STORAGE_KEY = "retab-theme";
+const OUTPUT_FONT_STORAGE_KEY = "retab-output-font-size";
+const SAMPLE_MANIFEST_PATH = "samples/samples.json";
+const DEFAULT_SAMPLE_PATHS = [
+  "samples/fade_to_black.txt",
+  "samples/fear_of_the_dark.txt",
+];
+const OUTPUT_FONT_MIN = 11;
+const OUTPUT_FONT_MAX = 30;
+const OUTPUT_FONT_STEP = 1;
+const OUTPUT_FONT_DEFAULT = 14;
 const LEGACY_THEME_PATHS = {
   "themes/1-radio-terminal.css": "themes/radio.css",
   "themes/2-stein-um-stein.css": "themes/stein.css",
@@ -47,6 +61,86 @@ const LEGACY_THEME_PATHS = {
   "themes/9-engel-ethereal.css": "themes/engel.css",
 };
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function loadSavedOutputFontSize() {
+  const rawValue = window.localStorage.getItem(OUTPUT_FONT_STORAGE_KEY);
+  const parsedValue = Number(rawValue);
+  if (!Number.isFinite(parsedValue)) {
+    return OUTPUT_FONT_DEFAULT;
+  }
+  return clamp(parsedValue, OUTPUT_FONT_MIN, OUTPUT_FONT_MAX);
+}
+
+function applyOutputFontSize(nextSize) {
+  const safeSize = clamp(nextSize, OUTPUT_FONT_MIN, OUTPUT_FONT_MAX);
+  outputTextEl.style.fontSize = `${safeSize}px`;
+  window.localStorage.setItem(OUTPUT_FONT_STORAGE_KEY, String(safeSize));
+}
+
+function getIsOutputFullscreen() {
+  const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+  return fullscreenElement === outputFrameEl;
+}
+
+function updateFullscreenButtonLabel() {
+  outputFullscreenBtnEl.textContent = getIsOutputFullscreen() ? "Exit" : "Full";
+}
+
+function requestOutputFullscreen() {
+  if (outputFrameEl.requestFullscreen) {
+    return outputFrameEl.requestFullscreen();
+  }
+  if (outputFrameEl.webkitRequestFullscreen) {
+    outputFrameEl.webkitRequestFullscreen();
+    return Promise.resolve();
+  }
+  return Promise.reject(new Error("Fullscreen is not supported in this browser."));
+}
+
+function exitOutputFullscreen() {
+  if (document.exitFullscreen) {
+    return document.exitFullscreen();
+  }
+  if (document.webkitExitFullscreen) {
+    document.webkitExitFullscreen();
+    return Promise.resolve();
+  }
+  return Promise.reject(new Error("Fullscreen exit is not supported in this browser."));
+}
+
+function initOutputDisplayControls() {
+  applyOutputFontSize(loadSavedOutputFontSize());
+  updateFullscreenButtonLabel();
+
+  outputFontIncBtnEl.addEventListener("click", () => {
+    const currentSize = parseFloat(getComputedStyle(outputTextEl).fontSize);
+    applyOutputFontSize(currentSize + OUTPUT_FONT_STEP);
+  });
+
+  outputFontDecBtnEl.addEventListener("click", () => {
+    const currentSize = parseFloat(getComputedStyle(outputTextEl).fontSize);
+    applyOutputFontSize(currentSize - OUTPUT_FONT_STEP);
+  });
+
+  outputFullscreenBtnEl.addEventListener("click", async () => {
+    try {
+      if (getIsOutputFullscreen()) {
+        await exitOutputFullscreen();
+      } else {
+        await requestOutputFullscreen();
+      }
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  });
+
+  document.addEventListener("fullscreenchange", updateFullscreenButtonLabel);
+  document.addEventListener("webkitfullscreenchange", updateFullscreenButtonLabel);
+}
+
 function formatSampleLabel(samplePath) {
   const fileName = samplePath.split("/").pop() || "";
   const withoutExtension = fileName.replace(/\.[^.]+$/, "");
@@ -54,9 +148,7 @@ function formatSampleLabel(samplePath) {
 }
 
 function getFallbackSamplePaths() {
-  return [...sampleSelectEl.options]
-    .map((option) => option.value)
-    .filter((value) => value && value.endsWith(".txt"));
+  return [...DEFAULT_SAMPLE_PATHS];
 }
 
 function setSampleOptions(samplePaths) {
@@ -76,6 +168,16 @@ function setSampleOptions(samplePaths) {
 }
 
 async function discoverSamplePaths() {
+  const manifestResponse = await fetch(SAMPLE_MANIFEST_PATH);
+  if (manifestResponse.ok) {
+    const manifestData = await manifestResponse.json();
+    if (Array.isArray(manifestData)) {
+      return manifestData
+        .filter((path) => typeof path === "string" && path.startsWith("samples/") && path.endsWith(".txt"))
+        .sort((a, b) => a.localeCompare(b));
+    }
+  }
+
   const response = await fetch("samples/");
   if (!response.ok) {
     throw new Error("Cannot read samples directory");
@@ -310,4 +412,5 @@ downloadBtnEl.addEventListener("click", () => {
 updateModeState();
 initSampleSelect();
 initDevThemeSwitcher();
+initOutputDisplayControls();
 initPyodideRuntime();
