@@ -24,6 +24,8 @@ PRESET_TUNINGS = {
     "mandolin": ["G3", "D4", "A4", "E5"],
 }
 
+INDEX_TO_NOTE_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
 def note_to_midi(note_str: str) -> int:
     """
     Converts a scientific pitch notation string (e.g., 'C#4', 'Eb3') to a MIDI note number.
@@ -46,6 +48,19 @@ def note_to_midi(note_str: str) -> int:
     # Calculate MIDI note number
     midi_number = (octave + 1) * 12 + note_index
     return midi_number
+
+def midi_to_note_name(midi_number: int) -> str:
+    """
+    Converts a MIDI note number to scientific pitch notation (e.g., 60 -> C4).
+    """
+    if not isinstance(midi_number, int):
+        raise ValueError(f"MIDI note must be an integer, got: {midi_number!r}")
+    if midi_number < 0 or midi_number > 127:
+        raise ValueError(f"MIDI note out of range (0-127): {midi_number}")
+
+    note_name = INDEX_TO_NOTE_SHARP[midi_number % 12]
+    octave = (midi_number // 12) - 1
+    return f"{note_name}{octave}"
 
 def get_tuning_midi(tuning_input: str) -> List[int]:
     """

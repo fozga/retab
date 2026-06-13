@@ -1,7 +1,6 @@
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field
-# Assuming Note and TimeSlice are imported from your models file (e.g., pitch_timeline)
-from pitch_timeline import TimeSlice, Note
+from note_sequence import TimeSlice, Note
 
 def get_pitch_in_range(pitch: int, target_tuning: List[int], max_fret: int = 24) -> int:
     """

@@ -47,7 +47,17 @@ class TimeSlice:
 
 # --- Rendering Logic ---
 
-def render_note_sequence(timeline: List[TimeSlice]) -> str:
+def max_simultaneous_notes_in_timeline(timeline: List[TimeSlice]) -> int:
+    """Return max number of simultaneous note events in this timeline."""
+    if not timeline:
+        return 1
+
+    return max(
+        (len(ts.notes) for ts in timeline if not ts.is_empty and not ts.special_char),
+        default=1
+    )
+
+def render_note_sequence(timeline: List[TimeSlice], fixed_height: Optional[int] = None) -> str:
     """
     Takes the parsed timeline and renders an intermediate ASCII representation 
     using actual note names (e.g., C4, D#3) instead of frets.
@@ -57,12 +67,11 @@ def render_note_sequence(timeline: List[TimeSlice]) -> str:
     if not timeline:
         return ""
 
-    # Find the maximum number of notes played at the exact same time
-    # (Dynamically handles 1 to 3+ lines as requested)
-    max_simultaneous_notes = max(
-        (len(ts.notes) for ts in timeline if not ts.is_empty and not ts.special_char), 
-        default=1
-    )
+    # Use file-global fixed height when provided, otherwise derive from this block.
+    if fixed_height is not None and fixed_height > 0:
+        max_simultaneous_notes = fixed_height
+    else:
+        max_simultaneous_notes = max_simultaneous_notes_in_timeline(timeline)
     
     # Initialize empty string builders for our lines
     lines = ["" for _ in range(max_simultaneous_notes)]
@@ -91,9 +100,10 @@ def render_note_sequence(timeline: List[TimeSlice]) -> str:
         note_strings = [midi_to_note_name(n.pitch_midi) for n in sorted_notes]
         note_strings.extend(['x' for _ in dead_notes])
         
-        # Find the max width required in this specific vertical column
-        # A note like 'D#3' needs 3 chars. We need to pad other lines to match.
-        slice_width = max([len(s) for s in note_strings] + [1])
+        # Find the max width required in this specific vertical column.
+        # Add 1 extra char so adjacent note tokens are always separated by '-'.
+        # This prevents unreadable runs like: B5F#5D5B4...
+        slice_width = max([len(s) for s in note_strings] + [1]) + 1
         
         for i in range(max_simultaneous_notes):
             if i < len(note_strings):
